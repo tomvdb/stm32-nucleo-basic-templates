@@ -1,0 +1,7 @@
+c:\source\stmbootloaderapp\stmbootloaderapp\bin\Debug\stmbootloaderapp.exe
+c:\source\stmbootloaderapp\stmbootloaderapp\bin\Debug\stmbootloaderapp.pdb
+c:\source\stmbootloaderapp\stmbootloaderapp\obj\x86\Debug\stmbootloaderapp.mainFrm.resources
+c:\source\stmbootloaderapp\stmbootloaderapp\obj\x86\Debug\stmbootloaderapp.Properties.Resources.resources
+c:\source\stmbootloaderapp\stmbootloaderapp\obj\x86\Debug\stmbootloaderapp.csproj.GenerateResource.Cache
+c:\source\stmbootloaderapp\stmbootloaderapp\obj\x86\Debug\stmbootloaderapp.exe
+c:\source\stmbootloaderapp\stmbootloaderapp\obj\x86\Debug\stmbootloaderapp.pdb

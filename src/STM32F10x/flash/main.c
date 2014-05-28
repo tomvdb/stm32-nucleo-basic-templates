@@ -6,8 +6,16 @@
 #include <stdarg.h>
 
 #include "mini-printf.h"
+#include "md5.h"
+
+#define RX_BUFFER_SIZE  300
+
+// function prototypes
+void usart_print( char *msg );
 
 static __IO uint32_t TimingDelay;
+static uint8_t rxBuffer[RX_BUFFER_SIZE];
+static uint8_t rxCount;
 
 RCC_ClocksTypeDef RCC_Clocks;
 
@@ -17,6 +25,19 @@ RCC_ClocksTypeDef RCC_Clocks;
 
 // led
 // PA5
+
+void usart_printf( char *fmt, ... )
+{
+  char buffer[256];
+
+  int ret;
+  va_list va;
+  va_start(va, fmt);
+  ret = mini_vsnprintf(buffer, 256, fmt, va);
+  va_end(va);  
+
+  usart_print(buffer);
+}
 
 void usart_write(uint8_t ch)
 {
@@ -48,6 +69,89 @@ void usart_print( char *msg )
 		usart_write( (uint8_t)*msg++ );
 }
 
+void usartWrite( uint8_t data[], uint8_t offset, uint8_t count )
+{
+  for ( uint8_t c = 0; c < count; c++ )
+    usart_write( data[offset + c] );
+}
+
+
+void shiftRXBuffer(int count)
+{
+  memmove( &rxBuffer[0], &rxBuffer[count], RX_BUFFER_SIZE - count );
+  rxCount-=count;
+}
+
+void makeFrame( uint8_t *buffer[], uint8_t cmd, uint8_t len, uint8_t *data[])
+{
+  buffer[0] = 0x21;
+  buffer[1] = 0x21;
+  buffer[2] = cmd;
+  buffer[3] = len;
+
+  for ( int c = 0; c < len; c++)
+  {
+    buffer[4 + c] = data[c];
+  }
+}
+
+void handlePing()
+{
+  uint8_t buffer[4];
+  makeFrame( &buffer, 0x01, 0x00, NULL);
+  usartWrite(buffer, 0, 4);
+}
+
+void processCommands(uint8_t cmd, uint8_t len, uint8_t data[])
+{
+  switch( cmd )
+  {
+    case 1 : handlePing(); break;
+  }
+}
+
+void processRX()
+{
+  if (rxCount < 4)
+    return; // need atleast 4 bytes for a command
+
+  while ( rxCount > 3)
+  {
+    // do we have identifiers?
+    if ( rxBuffer[0] != '!' || rxBuffer[1] != '!' )
+    {
+      // shift one up and try again
+      shiftRXBuffer(1);
+      continue;
+    }
+
+    // get cmd
+    uint8_t cmd = rxBuffer[2];
+    uint8_t len = rxBuffer[3];
+
+    GPIOA->ODR ^= GPIO_Pin_5;
+
+    //usart_printf("cmd recv: %u\r\n", cmd);
+    //usart_printf("data len: %u\r\n", len);
+
+    // get data
+    uint8_t dataPacket[len];
+
+    for ( int c = 0; c < len; c++)
+      dataPacket[c] = rxBuffer[4 + c];
+
+    usart_write(len);
+
+    processCommands(cmd, len, dataPacket);
+
+    usart_print( "done");
+    // remove from buffer
+    shiftRXBuffer(4+len);
+
+    usart_print( "done");
+  }
+
+}
 
 int main(void)
 {
@@ -55,6 +159,8 @@ int main(void)
   SysTick_Config(RCC_Clocks.HCLK_Frequency / 1000);
     
   GPIO_InitTypeDef gpio_init;
+ 
+  // rx setup **********************************************************************************************
   USART_InitTypeDef usart_init;
   USART_ClockInitTypeDef usart_clk_init;
  
@@ -87,34 +193,38 @@ int main(void)
   USART_Init(USART2, &usart_init);
   USART_Cmd(USART2,ENABLE);    
      
-  while(USART_GetFlagStatus(USART2, USART_FLAG_TC) == RESET) {}       
+  while(USART_GetFlagStatus(USART2, USART_FLAG_TC) == RESET) {}    
 
-  uint32_t flashaddr = 0x0800010C;
- 
-  /*  
-  FLASH_Unlock();
-  FLASH_Status error = FLASH_ErasePage( flashaddr);
-  FLASH_ProgramWord( flashaddr, 0x54534554);
-  FLASH_Lock();
-  */
+  memset(&rxBuffer, 0x00, 300);
+  // *******************************************************************************************************   
+
+  uint32_t sanityOffset = 0x10C;
+  uint32_t firmlenOffset = sanityOffset + 4;
   
-  char buffer[20];
+  uint32_t sanityCheck = *((uint32_t*)sanityOffset);
+  uint32_t firmwarelen = *((uint32_t*)firmlenOffset);
+
+  //usart_print("Bootloader\r\n");
+
+  if ( sanityCheck != 0xDEADBEEF )
+  {
+    //usart_print( "Sanity Check Failed\r\n");
+    return 1;
+  }
+  else
+  {
+    //usart_printf("FW Len: %X\r\n", firmwarelen );
+  }
+
   while (1)
   {
-    uint32_t value = *((uint32_t*)flashaddr);
-
-    //uint8_t *ch = (uint8_t*)flashaddr;
-
-    snprintf(buffer, 20, "%d", value );
-    usart_print( buffer );
-//    usart_write(*ch++);
-//    usart_write(*ch++);
-//    usart_write(*ch++);
-//    usart_write(*ch);
-
-    // toggle led
-    GPIOA->ODR ^= GPIO_Pin_5;
-    Delay(1000);
+    
+      while ( usart_available() && rxCount < 300)
+      {
+        rxBuffer[rxCount++] = usart_read();
+        processRX();
+      }
+    
   }
 }
 
