@@ -1,4 +1,10 @@
+// rtc real time clock example on the STM32L152 Nucleo
+// note: you need X2 populated with a 32.768 crystal
+// read here for more information:
+// http://tomvandenbon.co.za/blog/?p=94 
+
 #include "main.h"
+#include "mini-printf.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -122,13 +128,31 @@ int main(void)
   rtcInit.RTC_SynchPrediv = 0xFF; 
   RTC_Init(&rtcInit); 
 
-  while (1)
-  {
-    usart_print( "RTC Example" );
 
-    // toggle led
-    GPIOA->ODR ^= GPIO_Pin_5;
-    Delay(500);
+  // Set the time (BCD)
+  RTC_TimeTypeDef RTC_TimeStructure;
+  RTC_TimeStructure.RTC_H12     = RTC_H12_AM;
+  RTC_TimeStructure.RTC_Hours   = 0x01;
+  RTC_TimeStructure.RTC_Minutes = 0x00;
+  RTC_TimeStructure.RTC_Seconds = 0x00;
+  RTC_SetTime(RTC_Format_BCD, &RTC_TimeStructure);
+
+
+  char strDisp[20];
+  int prevSecond = -1;
+
+  while (1)
+  {     
+    RTC_GetTime(RTC_Format_BIN, &RTC_TimeStructure );
+
+    if ( RTC_TimeStructure.RTC_Seconds != prevSecond )
+    {      
+      mini_snprintf( strDisp, 20,  "%02d:%02d:%02d\r\n", RTC_TimeStructure.RTC_Hours, RTC_TimeStructure.RTC_Minutes, RTC_TimeStructure.RTC_Seconds );
+      usart_print( strDisp );
+      prevSecond = RTC_TimeStructure.RTC_Seconds;
+      GPIOA->ODR ^= GPIO_Pin_5;
+    }      
+
   }
 }
 
